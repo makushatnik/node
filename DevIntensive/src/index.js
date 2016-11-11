@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 
+import canonize from './canonize';
+
 const app = express();
 app.use(cors());
 app.get('/', (req, res) => {
@@ -28,20 +30,28 @@ app.get('/task2B', (req, res) => {
   fullname = fullname.toLowerCase();
   let arr = fullname.split(/[\s]+/);
   let res_str = '';
-  //res_str = fullname.replace(/([a-zA-Zа-яА-Я]+) ([a-zA-Zа-яА-Я]+) ([a-zA-Zа-яА-Я]+)/g, "$3 $1. $2.");
+  
   if (arr.length <= 0 || arr.length > 3) {
   	res.send('Invalid fullname');
   	return;
-  } else if (arr.length == 3) {
+  } else if (arr.length === 3) {
   	res_str = arr[2].charAt(0).toUpperCase() + arr[2].substr(1) + ' '
         + arr[0].charAt(0).toUpperCase() + '. ' + arr[1].charAt(0).toUpperCase() + '.';
-  } else if (arr.length == 2) {
+  } else if (arr.length === 2) {
   	res_str = arr[1].charAt(0).toUpperCase() + arr[1].substr(1) + ' '
         + arr[0].charAt(0).toUpperCase() + '.';
-  } else if (arr.length == 1) {
+  } else if (arr.length === 1) {
   	res_str = arr[0].charAt(0).toUpperCase() + arr[0].substr(1);
   }
   res.send(res_str);
+});
+
+app.get('/task2C', (req, res) => {
+  let username = req.query.username.trim();
+  if (!username) res.send('Invalid username');
+  username = canonize(username);
+  if (!username) res.send('Invalid username');
+  res.send('@' + username);
 });
 
 app.listen(3000, () => {

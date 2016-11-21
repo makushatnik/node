@@ -3,20 +3,56 @@ import fetch from 'isomorphic-fetch';
 import cors from 'cors';
 import Promise from 'bluebird';
 import _ from 'lodash';
+import bunyan from 'bunyan';
 import mongoose from 'mongoose';
 import bodyParser from 'body-parser';
 //import cookieParser from 'cookie-parser';
+//import expressJwt from 'express-jwt';
+//import jwt from 'jsonwebtoken';
 
 import canonize from './canonize';
 import savePetsInDb from './savePetsInDb';
 import Pet from './models/Pet';
 import User from './models/User';
 import isAdmin from './middlewares/isAdmin';
+// import getApi from './api';
+// import getAuth from './resources/Auth';
+// import getMiddlewares from './middlewares';
+
+global.__DEV__ = true;
+
+const log = bunyan.createLogger({
+  name: 'app',
+  src: __DEV__,
+  level: 'trace'
+});
+
+// const middlewares = getMiddlewares({
+//   log,
+// });
+
+// const models = {
+//   User,
+// }
+
+// const auth = getAuth({
+//   log,
+//   models
+// });
 
 mongoose.Promise = Promise;
-mongoose.connect('mongodb://localhost/skillbranch');
+//mongoose.connect('mongodb://localhost/skillbranch');
 
 const app = express();
+
+// app.use(middlewares.reqLog);
+// app.use(middlewares.accessLogger);
+// app.use(middlewares.reqParser);
+
+// app.use(auth.parseToken);
+// app.use(auth.parseUser);
+
+
 //const router = express.Router();
 app.use(cors());
 app.use(bodyParser.urlencoded({extended: false}));
@@ -57,11 +93,36 @@ app.post('/data', async (req, res) => {
 });
 //***************************  END SECTION  ****************************
 
-app.get('/', (req, res) => {
-  res.json({
-    hello: 'JS World',
-  });
-});
+// const secret = "shhhhhhared-secret";
+
+// app.get('/', (req, res) => {
+//   res.json({
+//     hello: 'JS World',
+//   });
+// });
+
+// app.get('/token', (req, res) => {
+//   const data = {
+//     user: "eageev",
+//     name: "Evgeny Ageev"
+//   };
+//   return res.json(jwt.sign(data, secret));
+// });
+
+// app.get('/protected', expressJwt(secret), (req, res) => {
+//   return res.json(req.user);
+// });
+
+// const auth = getAuth({
+//   models: {User}
+// });
+
+// app.all('/auth/validate', auth.validate);
+// app.post('/auth/signup', auth.signup);
+// app.all('/auth/login', auth.login);
+
+// const api = getApi({});
+// app.use('/api', api);
 
 app.get('/task2A', (req, res) => {
   const sum = (parseInt(req.query.a) || 0) + (parseInt(req.query.b) || 0);
@@ -106,8 +167,124 @@ app.get('/task2C', (req, res) => {
   res.send('@' + username);
 });
 
+//************************** COLORS SECTION *****************************
+app.get('/task2D', (req, res) => {
+  let param;
+  let parsed;
+  if (req.query.color !== undefined) {
+    param = req.query.color;
+    param = param.toLowerCase().replace(/\s/g,"");
+    param = param.replace(/%20/g,'');
+  } else {
+    return res.status(400).send('Invalid color');
+  }
+  let tmp = '';
+  console.log('param - ' + param);
+  //check Hex number
+  if (/^#?[\da-f]{3,6}$/.test(param)) {
+    if (param.indexOf('#') !== -1) {
+      param = param.substring(1);
+    }
+
+    if (param.length === 3) {
+      param = param.split('').map(x => x + x).join('');
+    } else if (param.length !== 6) {
+      return res.send('Invalid color');
+    }
+  //check RGB
+  } else {
+    let aRGB = param.match(/^rgb\((\d{1,3}[%]?),(\d{1,3}[%]?),(\d{1,3}[%]?)\)$/i);
+    //let HSL = param.match(/^hsl\((\d{1,3}[%]?),(\d{1,3}[%]?),(\d{1,3}[%]?)\)$/i);
+    let HSL = param.match(/^hsl\((\d{1,3}),(\d{1,3}%),(\d{1,3}%)\)$/i);
+    if (aRGB) {
+      for (var i=1;  i<=3; i++) {
+        console.log(aRGB[i]);
+        let num = parseInt(aRGB[i]);
+        console.log(num);
+        if (num > 255) return res.send('Invalid color');
+        tmp += Math.round((aRGB[i][aRGB[i].length-1]=="%"?2.55:1)*num).toString(16).replace(/^(.)$/,'0$1');
+      }
+      param = tmp;
+    //check HSL
+    } else if (HSL) {
+      let arr_num = [];
+      for (var i=1;  i<=3; i++) {
+        let num = parseInt(HSL[i]);
+        arr_num[i-1] = num;
+      }
+
+      let obj = hsl2rgb(arr_num[0],arr_num[1],arr_num[2]);
+      if (!obj) return res.send('Invalid color');
+
+      tmp = rgb2hex(obj.r, obj.g, obj.b);
+      if (!tmp) return res.send('Invalid color');
+      param = tmp;
+    } else {
+      return res.send('Invalid color');
+    }
+  }
+  
+  return res.send('#' + param);
+});
+
+function rgb2hex(r, g, b) {
+  let str = '';
+  let r_num = parseInt(r);
+  let g_num = parseInt(g);
+  let b_num = parseInt(b);
+  if (r_num < 0 || r_num > 255 || g_num < 0 || g_num > 255 || b_num < 0 || b_num > 255) return false;
+
+  str = r_num.toString(16).replace(/^(.)$/,'0$1') +
+        g_num.toString(16).replace(/^(.)$/,'0$1') +
+        b_num.toString(16).replace(/^(.)$/,'0$1');
+  return str;
+}
+
+function hsl2rgb(h, s, l) {
+  if (h < 0 || h > 360 || s < 0 || s > 100 || l < 0 || l > 100) return false;
+
+  var m1, m2, hue;
+  var r, g, b;
+  s /= 100;
+  l /= 100;
+  if (s === 0)
+    r = g = b = (l * 255);
+  else {
+    if (l < 0.5)
+      m2 = l * (s + 1);
+    else
+      m2 = l + s - l * s;
+    m1 = l * 2 - m2;
+    hue = h / 360;
+    r = HueToRgb(m1, m2, hue + 1/3);
+    g = HueToRgb(m1, m2, hue);
+    b = HueToRgb(m1, m2, hue - 1/3);
+  }
+
+  return {r: r, g: g, b: b};
+}
+
+function HueToRgb(m1, m2, hue) {
+  var v;
+  if (hue < 0)
+    hue += 1;
+  else if (hue > 1)
+    hue -= 1;
+
+  if (6 * hue < 1)
+    v = m1 + (m2 - m1) * hue * 6;
+  else if (2 * hue < 1)
+    v = m2;
+  else if (3 * hue < 2)
+    v = m1 + (m2 - m1) * (2/3 - hue) * 6;
+  else
+    v = m1;
+
+  return Math.round(255 * v);
+}
+//*********************** END SECTION ********************************
+
 //***********************  POKEMONS API SECTION  *********************
-const __DEV__ = true;
 const pokeapiUrl = 'https://pokeapi.co/api/v2/';
 const pokemonFields = ['id','name','base_experience','height','is_default','order','weight'];
 async function getPokemons(url, i = 0) {

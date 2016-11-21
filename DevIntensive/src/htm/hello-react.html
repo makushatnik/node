@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Hello, React</title>
+	<script src="https://fb.me/react-with-addons-0.14.0.js"></script>
+	<script src="https://fb.me/react-dom-0.14.0.js"></script>
+	<script src="http://fb.me/JSXTransformer-0.13.1.js"></script>
+</head>
+<body>
+	<div id="view"/>
+	<script>
+		var HelloReact = React.createClass({
+			render: function() {
+				return (
+				<div>
+					<div>Hello React</div>
+					<div>{this.props.message}</div>
+				</div>
+				);
+			}
+		});
+		ReactDOM.render(<HelloReact message='Message from props' />, document.getElementById('view'));
+	</script>
+</body>
+</html>

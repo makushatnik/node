@@ -6,6 +6,7 @@ import _ from 'lodash';
 import bunyan from 'bunyan';
 import mongoose from 'mongoose';
 import bodyParser from 'body-parser';
+import fs from 'fs';
 //import cookieParser from 'cookie-parser';
 //import expressJwt from 'express-jwt';
 //import jwt from 'jsonwebtoken';
@@ -14,6 +15,7 @@ import canonize from './canonize';
 import savePetsInDb from './savePetsInDb';
 import Pet from './models/Pet';
 import User from './models/User';
+import Pokemon from './models/Pokemon';
 import isAdmin from './middlewares/isAdmin';
 // import getApi from './api';
 // import getAuth from './resources/Auth';
@@ -42,7 +44,9 @@ const log = bunyan.createLogger({
 
 mongoose.Promise = Promise;
 //mongoose.connect('mongodb://localhost/skillbranch');
-
+//mongoose.connect('mongodb://publicdb.mgbeta.ru/eageev_skb');
+mongoose.connect('mongodb://admin:s3cret@ds019033.mlab.com:19033/skb');
+//mongodb://<dbuser>:<dbpassword>@ds019033.mlab.com:19033/skb
 const app = express();
 
 // app.use(middlewares.reqLog);
@@ -284,15 +288,166 @@ function HueToRgb(m1, m2, hue) {
 }
 //*********************** END SECTION ********************************
 
+app.get('/task2X', (req, res) => {
+  let param = req.query.i;
+  console.log(param);
+  if (param) param = +param;
+  else return res.json('Invalid parameter');
+
+  if (param < 0 || param > 18) {
+    return res.json('Invalid parameter');
+  }
+
+  let ff;
+  switch(param) {
+    case 0:
+      ff = 1;
+      break;
+    case 1:
+      ff = 18;//3*3*2
+      break;
+    case 2:
+      ff = 243;//3*3*3*3*3
+      break;
+    case 3:
+      ff = 3240;//3*3*3*3*2*2*2*5
+      break;
+    case 4:
+      ff = 43254;//3*3*3*3*3*2*2*89
+      break;
+    case 5:
+      ff = 577368;//3*3*3*3*3*3*3*3*2*2*2*2*11
+      break;
+    case 6:
+      ff = 7706988;
+      break;
+    case 7:
+      ff = 102876480;
+      break;
+    case 8:
+      ff = 1373243544;
+      break;
+    case 9:
+      ff = 18330699168;
+      break;
+    case 10:
+      ff = 244686773808;
+      break;
+    case 11:
+      ff = 3266193870720;
+      break;
+    case 12:
+      ff = 43598688377184;
+      break;
+    case 13:
+      ff = 581975750199168;
+      break;
+    case 14:
+      ff = 7768485393179328;
+      break;
+    case 15:
+      ff = 103697388221736960;
+      break;
+    case 16:
+      ff = 1384201395738071424;
+      break;
+    case 17:
+      ff = 18476969736848122368;
+      break;
+    case 18:
+      ff = 246639261965462754048;
+      break;
+  }
+  res.json(ff);
+});
+
 //***********************  POKEMONS API SECTION  *********************
 const pokeapiUrl = 'https://pokeapi.co/api/v2/';
 const pokemonFields = ['id','name','base_experience','height','is_default','order','weight'];
+const pokemonMetrics = ['id','name','height','weight'];
+let pocs = JSON.parse(fs.readFileSync("./src/pokemonsOld.json", "utf8"));
+let lastId = 0;
+app.get('/testPocs', async (req, res) => {
+  let pokemon = await Pokemon.find({"_id": '1'});
+  console.log('pokemon - ' + pokemon);
+  if (pokemon) {
+    console.log('Not Null');
+    if (pokemon[0]['_id']) {
+      console.log('ID - ' + pokemon[0]['_id']);
+    }
+    for (let key in pokemon) {
+      console.log('Key - ' + key + ', val - ' + pokemon[key]);
+    }
+  }
+  pokemon = await Pokemon.find({"_id": 1});
+  console.log('pokemon - ' + pokemon);
+  if (pokemon) {
+    console.log('Not Null');
+    if (pokemon['_id']) {
+      console.log('ID - ' + pokemon['_id']);
+    }
+  }
+  return res.send('Finished!');
+});
+
+app.get('/loadFromFS', (req, res) => {
+  pocs.forEach(x => {
+    console.log(x.id + ', ' + x.name + ', ' + x.weight);
+    let pokemon = Pokemon.findOne({"_id": x.id});
+    if (pokemon['_id']) {
+      console.log('Found - ' + pokemon);
+    }
+    try {
+      pokemon = new Pokemon({
+        "_id": x.id,
+        "name": x.name,
+        "height": x.height,
+        "weight": x.weight
+      });
+
+      pokemon.save();
+      console.log('success');
+    } catch (err) {
+      console.log('error', err);
+    }
+  });
+  res.send('Loaded!!!');
+});
+
+async function savePokemon(data) {
+  if (+data.id > lastId) {
+    lastId = +data.id;
+  }
+  console.log(data.id + ', ' + data.name + ', ' + data.weight);
+  let pokemon = await Pokemon.findOne({"_id": data.id});
+  if (pokemon['_id']) {
+    console.log('Found - ' + pokemon);
+    return true;
+  }
+  try {
+    pokemon = new Pokemon({
+      "_id": data.id,
+      "name": data.name,
+      "height": data.height,
+      "weight": data.weight
+    });
+
+    await pokemon.save();
+    console.log('success');
+    return true;
+  } catch (err) {
+    console.log('error', err);
+    //throw err;
+    return false;
+  }
+}
+
 async function getPokemons(url, i = 0) {
   console.log('getPokemons ', url, i);
   const response = await fetch(url);
   const page = await response.json();
   const pokemons = page.results;
-  if (__DEV__ && i > 3) {
+  if (__DEV__ && i > 5) {
     return pokemons;
   }
   if (page.next) {
@@ -309,11 +464,31 @@ async function getPokemon(url) {
   console.log('getPokemon ', url);
   const response = await fetch(url);
   const pokemon = await response.json();
+  if (!savePokemon(pokemon)) {//return false;
+    throw new Error('Error!');
+  }
   return pokemon;
 }
+
+app.get('/loadPocs', async (req, res) => {
+  try {
+    const pokemonsInfo = await getPokemons(`${pokeapiUrl}pokemon/?offset=${lastId}`);
+    if (!pokemonsInfo) return res.send('Get pokemons error');
+    const pokemonsPromises = pokemonsInfo.map(info => {
+      return info.url;
+    });
+    pokemonsPromises.forEach(x => getPokemon(x));
+    res.send('Loaded!!! l - ' + lastId);
+  } catch(err) {
+    console.log(err);
+    return res.json({err});
+  }
+  return res.json(pocs);
+});
+
 app.get('/task3X', async (req, res) => {
   try {
-    const pokemonsInfo = await getPokemons(pokeapiUrl + 'pokemon/');
+    const pokemonsInfo = await getPokemons(`${pokeapiUrl}pokemon/`);
     const pokemonsPromises = pokemonsInfo.map(info => {
       return getPokemon(info.url);
     });
@@ -323,6 +498,91 @@ app.get('/task3X', async (req, res) => {
     });
     const sortPokemons = _.sortBy(pokemons, pokemon => pokemon.weight).reverse();
     return res.json({sortPokemons});
+  } catch (err) {
+    console.log(err);
+    return res.json({err});
+  }
+});
+
+app.get(/^\/task3C(\/([fat|angular|heavy|light|huge|micro]+)?)?$/, async (req, res) => {
+  try {
+    
+    let qarr = [];
+    qarr['limit'] = req.query.limit;
+    qarr['offset'] = req.query.offset;
+    if (!qarr['limit']) qarr['limit'] = 20;
+    else qarr['limit'] = +qarr['limit'];
+    if (!qarr['offset']) qarr['offset'] = 0;
+    else qarr['offset'] = +qarr['offset'];
+
+    
+    let result = [];
+    let sortPokemons;
+    
+    const param = req.params[1];
+    console.log('param - ' + param);
+    console.log('query - ' + qarr);
+    if (param === 'fat') {
+      result = await Pokemon.find({}).select({_id:0, name: 1, weight: 1, height: 1});
+      let arr = [];
+      for (let key in result) {
+        arr[key] = {};
+        arr[key].name = result[key].name;
+        arr[key].wh = Math.round(result[key].weight / result[key].height * 1000) / 1000;
+      }
+      result = arr;
+      result.sort(function(a, b) {
+        if (a.wh === b.wh) {
+          if (a.name > b.name) return 1;
+          else if (a.name < b.name) return -1;
+          else return 0;
+        } else {
+          return b.wh - a.wh;
+        }
+      });
+    } else if (param === 'angular') {
+      result = await Pokemon.find({}).select({_id:0, name: 1, weight: 1, height: 1});
+      let arr = [];
+      for (let key in result) {
+        arr[key] = {};
+        arr[key].name = result[key].name;
+        arr[key].wh = Math.round(result[key].weight / result[key].height * 1000) / 1000;
+      }
+      result = arr;
+      result.sort(function(a, b) {
+        if (a.wh === b.wh) {
+          if (a.name > b.name) return 1;
+          else if (a.name < b.name) return -1;
+          else return 0;
+        } else {
+          return a.wh - b.wh;
+        }
+      });
+    } else if (param === 'heavy') {
+      result = await Pokemon.find({}).sort({weight:-1, name: 1}).select({_id:0, name: 1});
+    } else if (param === 'light') {
+      result = await Pokemon.find({}).sort({weight:1, name: 1}).select({_id:0, name: 1});
+    } else if (param === 'huge') {
+      result = await Pokemon.find({}).sort({height:-1, name: 1}).select({_id:0, name: 1});
+    } else if (param === 'micro') {
+      result = await Pokemon.find({}).sort({height:1, name: 1}).select({_id:0, name: 1});
+    } else {
+      result = await Pokemon.find({}).sort({name: 1}).select({_id:0, name: 1});
+    }
+    
+    if (qarr['offset']) {
+      result = result.slice(qarr['offset'], qarr['offset'] + qarr['limit']);
+    } else {
+      result = result.slice(0, qarr['limit']);
+    }
+    
+    let tmp = [];
+    for (let key in result) {
+      tmp.push(result[key].name);
+    }
+    result = tmp;
+    console.log('res - ' + result);
+    return res.json(result);
   } catch (err) {
     console.log(err);
     return res.json({err});
@@ -348,20 +608,20 @@ app.get('/loadPC', async (req, res) => {
   } catch(err) {
     console.log('Что-то пошло не так:', err);
   }
-  //console.log(pc);
-  res.json(pc);
+  return res.json(pc);
 });
 
-app.get('/task3A', (req, res) => {
-  res.status(200).json(pc);
-});
-
-app.get(/^\/task3A\/([\w.\-\[\]]+)\/?([\w.\-\[\]]+)?\/?([\w.\-\[\]]+)?$/, (req, res) => {
+app.get(/^\/task3A(\/([\w.\-\[\]]+)?)?(\/([\w.\-\[\]]+)?)?(\/([\w.\-\[\]]+)?)?$/, (req, res) => {
+  let pars = [req.params[1], req.params[3], req.params[5]];
   console.log(req.params);
-  if (!Object.keys(req.params).length) return res.status(400).send("Empty parameters");
+  if (!Object.keys(req.params).length) {
+    return res.status(200).json(pc);
+  } else if (req.params[0] === '/' && !pars[0] && !pars[1] && !pars[2]) {
+    return res.status(200).json(pc);
+  }
 
   // /volumes
-  if (req.params[0] === 'volumes') {
+  if (pars[0] === 'volumes') {
     let tmp = [];
     let hddArr = pc.hdd;
     for (let i=0; i < hddArr.length; i++) {
@@ -392,8 +652,8 @@ app.get(/^\/task3A\/([\w.\-\[\]]+)\/?([\w.\-\[\]]+)?\/?([\w.\-\[\]]+)?$/, (req, 
 
   let result = pc;
   let is_arr = false;
-  for (let key in req.params) {
-    let curParam = req.params[key];
+  for (let key in pars) {
+    let curParam = pars[key];
     if (!curParam) break;
 
     if (!is_arr) {
@@ -440,6 +700,216 @@ app.get(/^\/task3A\/([\w.\-\[\]]+)\/?([\w.\-\[\]]+)?\/?([\w.\-\[\]]+)?$/, (req, 
 });
 //*****************  END SECTION ******************
 
+//******************  PETS SECTION  *******************
+let pets = {};
+const petsUrl = 'https://gist.githubusercontent.com/isuvorov/55f38b82ce263836dadc0503845db4da/raw/pets.json';
+
+function cloneObject(obj) {  
+    var newObj = {};  
+
+    for (var prop in obj) {  
+        if (typeof obj[prop] == 'object') {  
+          newObj[prop] = cloneObject(obj[prop]);  
+        } else {
+          newObj[prop] = obj[prop];
+        }
+    } 
+
+    return newObj;  
+}
+
+app.get('/testPets', (req, res) => {
+  return res.send(pets);
+});
+
+app.get('/loadPets', async (req, res) => {
+  try {
+    const response = await fetch(petsUrl);
+    pets = await response.json();
+  } catch(err) {
+    console.log('Что-то пошло не так:', err);
+  }
+  res.json(pets);
+});
+
+app.get(/^\/task3B(\/([\w.\-\[\]]+)?\/?([\w.\-\[\]]+)?\/?([\w.\-\[\]]+)?)?$/, (req, res) => {
+  
+  let pars = [req.params[1],req.params[2],req.params[3]];
+  console.log('pars - ' + pars);
+  //if (!Object.keys(req.params).length) {
+  if (!pars[0] && !pars[1] && !pars[2]) {
+    console.log(1);
+    return res.json(pets);
+  } else if (req.params[0] === '/' && !pars[0] && !pars[1] && !pars[2]) {
+    console.log(2);
+    return res.json(pets);
+  }
+
+  let qarr = [];
+  qarr['type'] = req.query.type;
+  qarr['havePet'] = req.query.havePet;
+  qarr['age_gt'] = +req.query.age_gt;
+  qarr['age_lt'] = +req.query.age_lt;
+  console.log('qarr - ' + qarr.join(','));
+  
+  
+  //let tmp;
+  //let result = cloneObject(pets);
+  let result = _.clone(pets);
+  let filtered = pets['pets'].slice(0);
+  if (result[pars[0]]) {
+    //FILTERS
+    if (qarr['havePet']) {
+      filtered = filtered.filter(x => x.type === qarr['havePet']);
+      console.log('f p - ' + filtered);
+    } else if (qarr['type']) {
+      filtered = filtered.filter(x => x.type === qarr['type']);
+    }
+    if (qarr['age_gt']) {
+      filtered = filtered.filter(x => x.age > qarr['age_gt']);
+    }
+    if (qarr['age_lt']) {
+      filtered = filtered.filter(x => x.age < qarr['age_lt']);
+    }
+
+    if (pars[0] === 'pets') {
+      result = filtered;
+    } else {
+      if (qarr['havePet']) {
+        let tmp = [];
+        pets['users'].forEach(x => {
+          filtered.forEach(y => {
+            if (x.id === y.userId) {
+              if (!tmp.includes(x)) {
+                tmp.push(x);
+              }
+            }
+          });
+        });
+        console.log('f u - ' + tmp);
+        result = tmp;
+      } else {
+        result = pets['users'].slice(0);
+      }
+    }
+
+    if (pars[1] && pars[2]) {
+      let obj;
+      if (/^\-?[\d]+$/.test(pars[1])) {
+        
+        //find by id
+        for (let key in result) {
+          if (result[key]['id'] === +pars[1]) {
+            obj = result[key];
+            break;
+          }
+        }
+        if (!obj) return res.status(404).send('Not Found');
+        
+        if (pars[2] === 'pets') {
+          
+          result = filtered.filter(x => x.userId === obj.id);
+
+        } else if (pars[2] === 'populate') {
+          
+          if (pars[0] === 'users') {
+            obj.pets = filtered.filter(x => x.userId === obj.id);
+            result = obj;
+          } else if (pars[0] === 'pets') {
+            pets['users'].forEach(x => {
+              if (x.id === obj.userId) {
+                obj.user = x;
+              }
+            });
+            result = obj;
+            return res.json(result);
+          }
+        }
+      
+      //find by username
+      } else if (/^[\D]+$/.test(pars[1])) {
+        
+        let obj;
+        for (let key in result) {
+          if (result[key]['username'] === pars[1]) {
+            obj = result[key];
+            break;
+          }
+        }
+        if (!obj) return res.status(404).send('Not Found');
+
+        if (pars[2] === 'pets') {
+          result = filtered.filter(x => x.userId === obj.id);
+        } else if (pars[2] === 'populate') {
+          if (pars[0] === 'users') {
+            obj.pets = filtered.filter(x => x.userId === obj.id);
+          }
+          result = obj;
+        }
+
+      }
+
+    } else if (pars[1]) {
+      //Populate
+      if (pars[1] === 'populate') {
+        if (pars[0] === 'users') {
+          result.map(x => {
+            x['pets'] = filtered.filter(y => y.userId === x.id);
+          });
+          console.log('populate - ' + result);
+          return res.json(result);
+        } else if (pars[0] === 'pets') {
+          result.map(x => {
+            let user = 'Not Found';
+            // for (let key in pets['users']) {
+            //   if (pets['users'][key]['id'] === x.userId) {
+            //     user = pets['users'][key];
+            //     break;
+            //   }
+            // }
+            pets['users'].forEach(y => {
+              if (y.id === x.userId) {
+                user = y;
+              }
+            });
+            x['user'] = user;
+          });
+        } else {
+          return res.send('Invalid parameters');
+        }
+      //Digits
+      } else if (/^\-?[\d]+$/.test(pars[1])) {
+        let arr;
+        if (pars[0] === 'users') {
+          arr = pets['users'].slice(0);
+        } else arr = filtered;
+
+        for (let key in arr) {
+          if (arr[key]['id'] === +pars[1]) {
+            return res.json(arr[key]);
+          }
+        }
+        return res.status(404).send('Not Found');
+      //Username
+      } else if (/^[\D]+$/.test(pars[1])) {
+        for (let key in result) {
+          if (result[key]['username'] === pars[1]) {
+            return res.json(result[key]);
+          }
+        }
+        return res.status(404).send('Not Found');
+      } else {
+        return res.send('Invalid parameters');
+      }
+    }
+
+  } else {
+    return res.send('Invalid parameters');
+  }
+  return res.json(result);
+});
+
+//***************************  END SECTION  *******************
 
 app.listen(3000, () => {
   console.log('Your app listening on port 3000!');
